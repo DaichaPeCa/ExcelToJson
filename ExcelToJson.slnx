@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ExcelToJson.Cli/ExcelToJson.Cli.csproj" />
+    <Project Path="src/ExcelToJson.Core/ExcelToJson.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ExcelToJson.Tests/ExcelToJson.Tests.csproj" />
+  </Folder>
+</Solution>

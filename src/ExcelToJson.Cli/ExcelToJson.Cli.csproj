@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ExcelToJson</AssemblyName>
+    <RootNamespace>ExcelToJson.Cli</RootNamespace>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ExcelToJson.Core/ExcelToJson.Core.csproj" />
+  </ItemGroup>
+</Project>

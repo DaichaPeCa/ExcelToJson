@@ -427,3 +427,5 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+# Repository-local .NET CLI home used by sandboxed tooling
+.dotnet-home/
