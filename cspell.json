@@ -1,0 +1,15 @@
+{
+  "language": "en-US",
+  "ignorePaths": [
+    ".editorconfig",
+    ".git",
+    ".gitattributes",
+    ".gitignore",
+    ".vscode",
+    "vscode-extension",
+    "*.dll",
+    "**/*.dll"
+  ],
+  "words": [
+  ]
+}
