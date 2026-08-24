@@ -23,6 +23,17 @@ Excelブックの表形式データを、シート間参照による階層構造
 - Windows 10 22H2以降のx64（Windows 11を含む）
 - publish済みの `ExcelToJson.exe` を使う場合、.NET Runtime、Visual Studio、Microsoft Excelは不要
 
+### 配布用EXEの作成環境
+
+アプリケーションを開発せず、ソースコードから配布用の `ExcelToJson.exe` を作成するだけの場合は、次の環境が必要です。
+
+- Windows x64
+- .NET SDK 9.0.3xx以降の9.0系
+- このリポジトリのソースコード
+- 初回のNuGet restoreに必要なインターネット接続
+
+Visual StudioとMicrosoft Excelは不要です。.NET Runtimeだけでは作成できないため、必ず.NET **SDK** をインストールしてください。
+
 ### 開発環境
 
 - Visual Studio 2022 17.14の最新サービス版
@@ -34,7 +45,62 @@ Excelブックの表形式データを、シート間参照による階層構造
 > [!IMPORTANT]
 > .NET 9のサポートは2026年11月10日に終了します。Visual Studio 2022での正式なIDEビルドを維持するためV1では.NET 9を採用していますが、継続保守では.NET 10以降への移行が必要です。
 
-## プロジェクト構成
+## 配布用の単体EXEを作成する
+
+ここでは、開発やテストコードの変更を行わず、ソースコードからWindows x64向けの配布用EXEを作成する手順を示します。
+
+PowerShellでリポジトリルートへ移動し、使用されるSDKを確認します。
+
+```powershell
+dotnet --version
+```
+
+`9.0.3xx`以降の9.0系が表示されることを確認してください。続いて、依存関係を復元し、空の出力先を指定してpublishします。
+
+```powershell
+dotnet restore src/ExcelToJson.Cli/ExcelToJson.Cli.csproj `
+  --locked-mode `
+  --runtime win-x64
+
+dotnet publish src/ExcelToJson.Cli/ExcelToJson.Cli.csproj `
+  --configuration Release `
+  --runtime win-x64 `
+  --self-contained true `
+  --no-restore `
+  --output artifacts/ExcelToJson-win-x64 `
+  /p:PublishSingleFile=true `
+  /p:PublishTrimmed=false `
+  /p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+`dotnet publish`にはソースコードのReleaseビルドも含まれるため、単体EXEの作成だけが目的なら、事前の`dotnet build`は不要です。このコマンドはpublish条件をすべて明示しており、Visual Studioのpublish profileには依存しません。
+
+成果物は次へ生成されます。
+
+```text
+artifacts/ExcelToJson-win-x64/ExcelToJson.exe
+```
+
+出力先のファイルを確認します。
+
+```powershell
+Get-ChildItem artifacts/ExcelToJson-win-x64 -File
+```
+
+空の出力先へpublishした場合、配布に必要なファイルは `ExcelToJson.exe` だけです。このEXEには.NETランタイムと依存ライブラリが含まれます。trimmingは、ClosedXMLなどが必要とするコードを誤って除去しないよう無効にしています。
+
+`ExcelToJson.exe`だけを任意のディレクトリへコピーし、入力ブックを指定して実行できることを確認してください。
+
+```powershell
+artifacts/ExcelToJson-win-x64/ExcelToJson.exe C:\data\sample.xlsx
+```
+
+成功すると `C:\data\sample.json` が生成されます。実行先に.NET Runtime、Visual Studio、Microsoft Excelは不要です。
+
+> [!NOTE]
+> `dotnet build`の出力ディレクトリにある `ExcelToJson.exe` は、配布用の単体EXEとは限りません。配布には、必ず上記のSelf-contained / Single-file指定で生成したpublish出力を使用してください。
+
+## 開発者向け: プロジェクト構成
 
 ```text
 ExcelToJson.slnx
@@ -46,7 +112,7 @@ ExcelToJson.slnx
 
 依存方向は `Cli -> Core` です。CoreではClosedXMLの型をWorkbook読取境界の内側に閉じ込め、変換と参照解決には中立な内部モデルを渡します。System.Text.Jsonによる書き込みも変換規則から分離しています。
 
-## ビルドとテスト
+## 開発者向け: ビルドとテスト
 
 PowerShellでリポジトリルートから実行します。
 
@@ -80,23 +146,6 @@ ExcelToJson.exe C:\data\sample.xlsx
 ```powershell
 dotnet run --project src/ExcelToJson.Cli -- C:\data\sample.xlsx
 ```
-
-## Windows x64向けpublish
-
-```powershell
-dotnet publish src/ExcelToJson.Cli/ExcelToJson.Cli.csproj `
-  --configuration Release `
-  --no-restore `
-  /p:PublishProfile=win-x64
-```
-
-成果物は次へ生成されます。
-
-```text
-src/ExcelToJson.Cli/bin/Release/net9.0/win-x64/publish/ExcelToJson.exe
-```
-
-publish profileはSelf-contained、Single-file、trimming無効です。成果物の確認では `ExcelToJson.exe` だけを別ディレクトリへコピーし、単独で変換できることを検証します。
 
 ## 数式セルの制約
 
