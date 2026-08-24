@@ -18,4 +18,10 @@
     <ProjectReference Include="../../src/ExcelToJson.Cli/ExcelToJson.Cli.csproj" />
     <ProjectReference Include="../../src/ExcelToJson.Core/ExcelToJson.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../samples/*.xlsx">
+      <Link>samples/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
