@@ -23,6 +23,7 @@ internal static partial class WorkbookTransformer
                     .Where(value => value is not null)
                     .Cast<JsonValue>()
                     .ToList()),
+            RootType.ScalarArray => context.TransformScalarRows(rootSheet, rootSheet.Rows),
             _ => null,
         };
 
@@ -74,19 +75,59 @@ internal static partial class WorkbookTransformer
             return new JsonValue.Object(properties);
         }
 
+        public JsonValue.Array TransformScalarRows(
+            SheetModel sheet,
+            IEnumerable<RowModel> rows)
+        {
+            ColumnModel valueColumn = sheet.Columns.Single();
+            List<JsonValue> items = [];
+            foreach (RowModel row in rows)
+            {
+                CellModel valueCell = row.Cells.Single();
+                if (valueCell.Value is CellValue.Empty)
+                {
+                    AddEmptyArrayElement(items, workbook.Settings.EmptyCell);
+                    continue;
+                }
+
+                JsonValue? item = ConvertScalarValue(sheet, valueColumn.DefaultType, valueCell);
+                if (item is not null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            return new JsonValue.Array(items);
+        }
+
         private JsonValue? ConvertValue(
             SheetModel sourceSheet,
             RowModel sourceRow,
             ColumnModel column,
             CellModel cell,
-            IReadOnlyList<RecordKey> path) => (cell.TypeOverride ?? column.DefaultType) switch
+            IReadOnlyList<RecordKey> path)
+        {
+            JsonType type = cell.TypeOverride ?? column.DefaultType;
+            return type switch
             {
-                JsonType.Text => ConvertText(sourceSheet, cell),
-                JsonType.Number => ConvertNumber(sourceSheet, cell),
-                JsonType.Boolean => ConvertBoolean(sourceSheet, cell),
-                JsonType.Date => ConvertDate(sourceSheet, cell),
+                JsonType.Text or JsonType.Number or JsonType.Boolean or JsonType.Date =>
+                    ConvertScalarValue(sourceSheet, type, cell),
                 JsonType.ObjectReference reference => ResolveObject(sourceSheet, sourceRow, cell, reference, path),
                 JsonType.ArrayReference reference => ResolveArray(sourceSheet, sourceRow, cell, reference, path),
+                JsonType.ScalarArrayReference reference => ResolveScalarArray(sourceSheet, cell, reference),
+                _ => null,
+            };
+        }
+
+        private JsonValue? ConvertScalarValue(
+            SheetModel sheet,
+            JsonType type,
+            CellModel cell) => type switch
+            {
+                JsonType.Text => ConvertText(sheet, cell),
+                JsonType.Number => ConvertNumber(sheet, cell),
+                JsonType.Boolean => ConvertBoolean(sheet, cell),
+                JsonType.Date => ConvertDate(sheet, cell),
                 _ => null,
             };
 
@@ -214,6 +255,23 @@ internal static partial class WorkbookTransformer
             return new JsonValue.Array(items);
         }
 
+        private JsonValue.Array? ResolveScalarArray(
+            SheetModel sourceSheet,
+            CellModel cell,
+            JsonType.ScalarArrayReference reference)
+        {
+            SheetModel target = workbook.Sheets[reference.SheetName];
+            string id = GetText(cell.Value, preserveTextWhitespace: false).Trim();
+            List<RowModel> matches = target.FindRows(id).ToList();
+            if (matches.Count == 0)
+            {
+                AddCellError(sourceSheet, cell, $"scalar-array参照 '{target.Name}:{id}' に一致する行がありません。");
+                return null;
+            }
+
+            return TransformScalarRows(target, matches);
+        }
+
         private void AddCellError(SheetModel sheet, CellModel cell, string message) =>
             Diagnostics.Add(new ConversionDiagnostic(message, sheet.Name, cell.Address));
     }
@@ -230,6 +288,20 @@ internal static partial class WorkbookTransformer
         else if (behavior == EmptyCellBehavior.EmptyString)
         {
             properties.Add(new KeyValuePair<string, JsonValue>(propertyName, new JsonValue.String(string.Empty)));
+        }
+    }
+
+    private static void AddEmptyArrayElement(
+        List<JsonValue> items,
+        EmptyCellBehavior behavior)
+    {
+        if (behavior == EmptyCellBehavior.Null)
+        {
+            items.Add(new JsonValue.Null());
+        }
+        else if (behavior == EmptyCellBehavior.EmptyString)
+        {
+            items.Add(new JsonValue.String(string.Empty));
         }
     }
 

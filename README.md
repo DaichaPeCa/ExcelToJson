@@ -10,6 +10,8 @@ Excelブックの表形式データを、シート間参照による階層構造
 - `text` / `number` / `boolean` / `date` の明示的な型変換
 - ヘッダーメモを既定型とし、データセルのメモでそのセルだけJSON型を上書き
 - `object:シート名` / `array:シート名` による単段・多段参照
+- `scalar-array:シート名` による文字列・数値・真偽値・日付の配列参照
+- `rootType=scalar-array` によるスカラー配列ルート
 - 実レコード経路による循環参照検出
 - UTF-8 BOMなし、インデント付きJSON
 - 変換成功後だけ既存JSONを安全に置換
@@ -22,6 +24,7 @@ Excelブックの表形式データを、シート間参照による階層構造
 リポジトリの [`samples`](samples/README.md) には、次のExcelファイルがあります。
 
 - `sample.xlsx`: シート間参照と型変換を含む、要件定義14章に対応した実行可能なサンプル
+- `scalar-array.xlsx`: `rootType=scalar-array` による文字列配列ルートの実行可能なサンプル
 - `template.xlsx`: `setting`、空の `root`、入力方法を説明する `_guide` を備えた作業開始用ひな形
 
 どちらもリポジトリ内の参考ファイルであり、Windows向けのpublish成果物には含まれません。

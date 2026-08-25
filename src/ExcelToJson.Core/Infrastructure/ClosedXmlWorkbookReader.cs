@@ -84,6 +84,11 @@ internal static partial class ClosedXmlWorkbookReader
         }
 
         ValidateReferences(sheets, diagnostics);
+        ValidateScalarArraySheets(
+            settings?.RootType,
+            rootSheets.Count == 1 ? rootSheets[0].Name : null,
+            sheets,
+            diagnostics);
 
         if (settings is not null && rootSheets.Count == 1 && sheets.TryGetValue(rootSheets[0].Name, out SheetModel? root))
         {
@@ -173,10 +178,14 @@ internal static partial class ClosedXmlWorkbookReader
         {
             rootType = RootType.Array;
         }
+        else if (ControlComparer.Equals(rootSetting.Value, "scalar-array"))
+        {
+            rootType = RootType.ScalarArray;
+        }
         else
         {
             diagnostics.Add(new ConversionDiagnostic(
-                "rootTypeは object または array でなければなりません。",
+                "rootTypeは object、array、scalar-array のいずれかでなければなりません。",
                 worksheet.Name,
                 rootSetting.Cell,
                 "rootType"));
@@ -390,7 +399,9 @@ internal static partial class ClosedXmlWorkbookReader
         {
             string kind = specification[..separator].Trim();
             string referencedSheet = specification[(separator + 1)..].Trim();
-            if (ControlComparer.Equals(kind, "object") || ControlComparer.Equals(kind, "array"))
+            if (ControlComparer.Equals(kind, "object")
+                || ControlComparer.Equals(kind, "array")
+                || ControlComparer.Equals(kind, "scalar-array"))
             {
                 if (referencedSheet.Length == 0)
                 {
@@ -401,9 +412,12 @@ internal static partial class ClosedXmlWorkbookReader
                     return null;
                 }
 
-                return ControlComparer.Equals(kind, "object")
-                    ? new JsonType.ObjectReference(referencedSheet)
-                    : new JsonType.ArrayReference(referencedSheet);
+                return kind.ToUpperInvariant() switch
+                {
+                    "OBJECT" => new JsonType.ObjectReference(referencedSheet),
+                    "ARRAY" => new JsonType.ArrayReference(referencedSheet),
+                    _ => new JsonType.ScalarArrayReference(referencedSheet),
+                };
             }
         }
 
@@ -526,6 +540,7 @@ internal static partial class ClosedXmlWorkbookReader
         {
             JsonType.ObjectReference reference => reference.SheetName,
             JsonType.ArrayReference reference => reference.SheetName,
+            JsonType.ScalarArrayReference reference => reference.SheetName,
             _ => null,
         };
 
@@ -549,6 +564,110 @@ internal static partial class ClosedXmlWorkbookReader
                 sourceAddress));
         }
     }
+
+    private static void ValidateScalarArraySheets(
+        RootType? rootType,
+        string? rootSheetName,
+        IReadOnlyDictionary<string, SheetModel> sheets,
+        List<ConversionDiagnostic> diagnostics)
+    {
+        HashSet<string> scalarArraySheetNames = new(ControlComparer);
+        if (rootType == RootType.ScalarArray
+            && rootSheetName is not null
+            && sheets.ContainsKey(rootSheetName))
+        {
+            scalarArraySheetNames.Add(rootSheetName);
+        }
+
+        foreach (SheetModel sheet in sheets.Values)
+        {
+            foreach (ColumnModel column in sheet.Columns)
+            {
+                AddScalarArrayTarget(column.DefaultType, sheets, scalarArraySheetNames);
+            }
+
+            foreach (RowModel row in sheet.Rows)
+            {
+                foreach (CellModel cell in row.Cells)
+                {
+                    if (cell.TypeOverride is not null)
+                    {
+                        AddScalarArrayTarget(cell.TypeOverride, sheets, scalarArraySheetNames);
+                    }
+                }
+            }
+        }
+
+        foreach (string sheetName in scalarArraySheetNames)
+        {
+            ValidateScalarArraySheet(sheets[sheetName], diagnostics);
+        }
+    }
+
+    private static void AddScalarArrayTarget(
+        JsonType type,
+        IReadOnlyDictionary<string, SheetModel> sheets,
+        HashSet<string> scalarArraySheetNames)
+    {
+        if (type is JsonType.ScalarArrayReference reference && sheets.ContainsKey(reference.SheetName))
+        {
+            scalarArraySheetNames.Add(reference.SheetName);
+        }
+    }
+
+    private static void ValidateScalarArraySheet(
+        SheetModel sheet,
+        List<ConversionDiagnostic> diagnostics)
+    {
+        ColumnModel? valueColumn = sheet.Columns.SingleOrDefault(column => column.Number == 2);
+        if (valueColumn is null || !ControlComparer.Equals(valueColumn.Name, "value"))
+        {
+            diagnostics.Add(new ConversionDiagnostic(
+                "scalar-arrayの対象シートではB1をvalueヘッダーにしなければなりません。",
+                sheet.Name,
+                "B1"));
+        }
+
+        foreach (ColumnModel extraColumn in sheet.Columns.Where(column => column.Number >= 3))
+        {
+            diagnostics.Add(new ConversionDiagnostic(
+                "scalar-arrayの対象シートではC列以降のヘッダーを定義できません。",
+                sheet.Name,
+                extraColumn.Address,
+                extraColumn.Name));
+        }
+
+        if (valueColumn is null)
+        {
+            return;
+        }
+
+        if (!IsScalarType(valueColumn.DefaultType))
+        {
+            diagnostics.Add(new ConversionDiagnostic(
+                "scalar-arrayのvalue列にはtext、number、boolean、dateのいずれかを指定してください。",
+                sheet.Name,
+                valueColumn.Address,
+                valueColumn.Name));
+        }
+
+        int valueIndex = sheet.Columns.ToList().IndexOf(valueColumn);
+        foreach (RowModel row in sheet.Rows)
+        {
+            CellModel valueCell = row.Cells[valueIndex];
+            if (valueCell.TypeOverride is not null)
+            {
+                diagnostics.Add(new ConversionDiagnostic(
+                    "scalar-arrayのvalueデータセルでは型を上書きできません。",
+                    sheet.Name,
+                    valueCell.Address,
+                    valueColumn.Name));
+            }
+        }
+    }
+
+    private static bool IsScalarType(JsonType type) => type is
+        JsonType.Text or JsonType.Number or JsonType.Boolean or JsonType.Date;
 
     private static bool IsKnownSettingKey(string key) =>
         ControlComparer.Equals(key, "rootType")

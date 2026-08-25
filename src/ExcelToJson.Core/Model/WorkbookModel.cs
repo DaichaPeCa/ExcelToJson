@@ -18,6 +18,7 @@ internal enum RootType
 {
     Object,
     Array,
+    ScalarArray,
 }
 
 internal enum EmptyCellBehavior
@@ -54,6 +55,8 @@ internal abstract record JsonType
     internal sealed record ObjectReference(string SheetName) : JsonType;
 
     internal sealed record ArrayReference(string SheetName) : JsonType;
+
+    internal sealed record ScalarArrayReference(string SheetName) : JsonType;
 }
 
 internal sealed record RowModel(int Number, string Id, IReadOnlyList<CellModel> Cells);
