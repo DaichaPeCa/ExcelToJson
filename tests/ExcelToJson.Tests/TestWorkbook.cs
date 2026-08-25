@@ -67,4 +67,7 @@ internal static class TestWorkbook
 
     public static void SetType(IXLWorksheet sheet, int column, string specification) =>
         sheet.Cell(1, column).CreateComment().AddText(specification);
+
+    public static void SetType(IXLWorksheet sheet, int row, int column, string specification) =>
+        sheet.Cell(row, column).CreateComment().AddText(specification);
 }

@@ -68,7 +68,11 @@ public sealed class SampleWorkbookTests
             IXLWorksheet root = workbook.Worksheet("root");
             Assert.Equal("ID", root.Cell("A1").GetString());
             Assert.Equal(1, root.LastRowUsed()!.RowNumber());
-            Assert.False(workbook.Worksheet("_guide").Cell("A1").IsEmpty());
+            IXLWorksheet guide = workbook.Worksheet("_guide");
+            Assert.False(guide.Cell("A1").IsEmpty());
+            Assert.Equal("セル型上書き", guide.Cell("A6").GetString());
+            Assert.Contains("そのセルだけ", guide.Cell("B6").GetString(), StringComparison.Ordinal);
+            Assert.Contains("空または空白だけのメモは上書きしません", guide.Cell("B6").GetString(), StringComparison.Ordinal);
         }
 
         using TestWorkspace workspace = new();

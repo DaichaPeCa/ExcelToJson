@@ -79,14 +79,14 @@ internal static partial class WorkbookTransformer
             RowModel sourceRow,
             ColumnModel column,
             CellModel cell,
-            IReadOnlyList<RecordKey> path) => column.Type switch
+            IReadOnlyList<RecordKey> path) => (cell.TypeOverride ?? column.DefaultType) switch
             {
-                ColumnType.Text => ConvertText(sourceSheet, cell),
-                ColumnType.Number => ConvertNumber(sourceSheet, cell),
-                ColumnType.Boolean => ConvertBoolean(sourceSheet, cell),
-                ColumnType.Date => ConvertDate(sourceSheet, cell),
-                ColumnType.ObjectReference reference => ResolveObject(sourceSheet, sourceRow, cell, reference, path),
-                ColumnType.ArrayReference reference => ResolveArray(sourceSheet, sourceRow, cell, reference, path),
+                JsonType.Text => ConvertText(sourceSheet, cell),
+                JsonType.Number => ConvertNumber(sourceSheet, cell),
+                JsonType.Boolean => ConvertBoolean(sourceSheet, cell),
+                JsonType.Date => ConvertDate(sourceSheet, cell),
+                JsonType.ObjectReference reference => ResolveObject(sourceSheet, sourceRow, cell, reference, path),
+                JsonType.ArrayReference reference => ResolveArray(sourceSheet, sourceRow, cell, reference, path),
                 _ => null,
             };
 
@@ -167,7 +167,7 @@ internal static partial class WorkbookTransformer
             SheetModel sourceSheet,
             RowModel sourceRow,
             CellModel cell,
-            ColumnType.ObjectReference reference,
+            JsonType.ObjectReference reference,
             IReadOnlyList<RecordKey> path)
         {
             SheetModel target = workbook.Sheets[reference.SheetName];
@@ -189,7 +189,7 @@ internal static partial class WorkbookTransformer
             SheetModel sourceSheet,
             RowModel sourceRow,
             CellModel cell,
-            ColumnType.ArrayReference reference,
+            JsonType.ArrayReference reference,
             IReadOnlyList<RecordKey> path)
         {
             SheetModel target = workbook.Sheets[reference.SheetName];

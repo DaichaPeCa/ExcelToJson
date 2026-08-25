@@ -47,7 +47,7 @@ ExcelToJson.exe .\samples\sample.xlsx
 
 - `setting`には`rootType=array`、`emptyCell=omit`と、空の日付書式設定があります。
 - `root`は`ID`ヘッダーだけを持ち、データ行はありません。
-- `_guide`は変換対象外で、列、型メモ、参照、ID、空行終端の入力方法を説明します。
+- `_guide`は変換対象外で、列、ヘッダーの既定型、データセルの型上書き、参照、ID、空行終端の入力方法を説明します。
 - 空のまま変換した場合は`[]`を出力します。
 - `rootType=object`へ変更する場合は、`root`へデータ行をちょうど1行追加してください。
 

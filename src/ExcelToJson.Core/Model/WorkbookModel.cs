@@ -35,30 +35,30 @@ internal sealed record SheetModel(
     public IEnumerable<RowModel> FindRows(string id) => Rows.Where(row => string.Equals(row.Id, id, StringComparison.Ordinal));
 }
 
-internal sealed record ColumnModel(int Number, string Name, ColumnType Type, string Address);
+internal sealed record ColumnModel(int Number, string Name, JsonType DefaultType, string Address);
 
-internal abstract record ColumnType
+internal abstract record JsonType
 {
-    private ColumnType()
+    private JsonType()
     {
     }
 
-    internal sealed record Text : ColumnType;
+    internal sealed record Text : JsonType;
 
-    internal sealed record Number : ColumnType;
+    internal sealed record Number : JsonType;
 
-    internal sealed record Boolean : ColumnType;
+    internal sealed record Boolean : JsonType;
 
-    internal sealed record Date : ColumnType;
+    internal sealed record Date : JsonType;
 
-    internal sealed record ObjectReference(string SheetName) : ColumnType;
+    internal sealed record ObjectReference(string SheetName) : JsonType;
 
-    internal sealed record ArrayReference(string SheetName) : ColumnType;
+    internal sealed record ArrayReference(string SheetName) : JsonType;
 }
 
 internal sealed record RowModel(int Number, string Id, IReadOnlyList<CellModel> Cells);
 
-internal sealed record CellModel(string Address, CellValue Value);
+internal sealed record CellModel(string Address, CellValue Value, JsonType? TypeOverride);
 
 internal abstract record CellValue
 {

@@ -256,7 +256,7 @@ internal static partial class ClosedXmlWorkbookReader
                     headerCell.Address.ToString()));
             }
 
-            ColumnType? type = ParseColumnType(headerCell, worksheet.Name, diagnostics);
+            JsonType? type = ParseHeaderType(headerCell, worksheet.Name, diagnostics);
             if (type is not null)
             {
                 columns.Add(new ColumnModel(columnNumber, propertyName, type, headerCell.Address.ToString()!));
@@ -321,9 +321,11 @@ internal static partial class ClosedXmlWorkbookReader
             List<CellModel> cells = [];
             foreach (ColumnModel column in columns)
             {
+                IXLCell dataCell = worksheet.Cell(rowNumber, column.Number);
                 cells.Add(new CellModel(
-                    worksheet.Cell(rowNumber, column.Number).Address.ToString()!,
-                    rowValues[column.Number - 1]));
+                    dataCell.Address.ToString()!,
+                    rowValues[column.Number - 1],
+                    ParseDataCellTypeOverride(dataCell, worksheet.Name, diagnostics)));
             }
 
             rows.Add(new RowModel(rowNumber, id, cells));
@@ -332,30 +334,55 @@ internal static partial class ClosedXmlWorkbookReader
         return new SheetModel(worksheet.Name, columns, rows);
     }
 
-    private static ColumnType? ParseColumnType(
-        IXLCell headerCell,
+    private static JsonType? ParseHeaderType(
+        IXLCell cell,
         string sheetName,
         List<ConversionDiagnostic> diagnostics)
     {
-        string specification = headerCell.HasComment ? headerCell.GetComment().Text.Trim() : string.Empty;
-        if (specification.Length == 0 || ControlComparer.Equals(specification, "text"))
+        string specification = ReadTypeSpecification(cell);
+        return specification.Length == 0
+            ? new JsonType.Text()
+            : ParseJsonType(specification, cell, sheetName, diagnostics);
+    }
+
+    private static JsonType? ParseDataCellTypeOverride(
+        IXLCell cell,
+        string sheetName,
+        List<ConversionDiagnostic> diagnostics)
+    {
+        string specification = ReadTypeSpecification(cell);
+        return specification.Length == 0
+            ? null
+            : ParseJsonType(specification, cell, sheetName, diagnostics);
+    }
+
+    private static string ReadTypeSpecification(IXLCell cell) =>
+        cell.HasComment ? cell.GetComment().Text.Trim() : string.Empty;
+
+    private static JsonType? ParseJsonType(
+        string specification,
+        IXLCell cell,
+        string sheetName,
+        List<ConversionDiagnostic> diagnostics)
+    {
+        if (ControlComparer.Equals(specification, "text"))
         {
-            return new ColumnType.Text();
+            return new JsonType.Text();
         }
 
         if (ControlComparer.Equals(specification, "number"))
         {
-            return new ColumnType.Number();
+            return new JsonType.Number();
         }
 
         if (ControlComparer.Equals(specification, "boolean"))
         {
-            return new ColumnType.Boolean();
+            return new JsonType.Boolean();
         }
 
         if (ControlComparer.Equals(specification, "date"))
         {
-            return new ColumnType.Date();
+            return new JsonType.Date();
         }
 
         int separator = specification.IndexOf(':');
@@ -370,20 +397,20 @@ internal static partial class ClosedXmlWorkbookReader
                     diagnostics.Add(new ConversionDiagnostic(
                         $"{kind}: の参照先シート名が空です。",
                         sheetName,
-                        headerCell.Address.ToString()));
+                        cell.Address.ToString()));
                     return null;
                 }
 
                 return ControlComparer.Equals(kind, "object")
-                    ? new ColumnType.ObjectReference(referencedSheet)
-                    : new ColumnType.ArrayReference(referencedSheet);
+                    ? new JsonType.ObjectReference(referencedSheet)
+                    : new JsonType.ArrayReference(referencedSheet);
             }
         }
 
         diagnostics.Add(new ConversionDiagnostic(
             $"未知のJSON型 '{specification}' が指定されています。",
             sheetName,
-            headerCell.Address.ToString()));
+            cell.Address.ToString()));
         return null;
     }
 
@@ -472,33 +499,54 @@ internal static partial class ClosedXmlWorkbookReader
         {
             foreach (ColumnModel column in sheet.Columns)
             {
-                string? target = column.Type switch
-                {
-                    ColumnType.ObjectReference reference => reference.SheetName,
-                    ColumnType.ArrayReference reference => reference.SheetName,
-                    _ => null,
-                };
+                ValidateReference(column.DefaultType, sheet.Name, column.Address, sheets, diagnostics);
+            }
 
-                if (target is null)
+            foreach (RowModel row in sheet.Rows)
+            {
+                foreach (CellModel cell in row.Cells)
                 {
-                    continue;
-                }
-
-                if (target.StartsWith('_'))
-                {
-                    diagnostics.Add(new ConversionDiagnostic(
-                        $"変換対象外シート '{target}' は参照できません。",
-                        sheet.Name,
-                        column.Address));
-                }
-                else if (!sheets.ContainsKey(target))
-                {
-                    diagnostics.Add(new ConversionDiagnostic(
-                        $"参照先シート '{target}' が存在しません。",
-                        sheet.Name,
-                        column.Address));
+                    if (cell.TypeOverride is not null)
+                    {
+                        ValidateReference(cell.TypeOverride, sheet.Name, cell.Address, sheets, diagnostics);
+                    }
                 }
             }
+        }
+    }
+
+    private static void ValidateReference(
+        JsonType type,
+        string sourceSheet,
+        string sourceAddress,
+        IReadOnlyDictionary<string, SheetModel> sheets,
+        List<ConversionDiagnostic> diagnostics)
+    {
+        string? target = type switch
+        {
+            JsonType.ObjectReference reference => reference.SheetName,
+            JsonType.ArrayReference reference => reference.SheetName,
+            _ => null,
+        };
+
+        if (target is null)
+        {
+            return;
+        }
+
+        if (target.StartsWith('_'))
+        {
+            diagnostics.Add(new ConversionDiagnostic(
+                $"変換対象外シート '{target}' は参照できません。",
+                sourceSheet,
+                sourceAddress));
+        }
+        else if (!sheets.ContainsKey(target))
+        {
+            diagnostics.Add(new ConversionDiagnostic(
+                $"参照先シート '{target}' が存在しません。",
+                sourceSheet,
+                sourceAddress));
         }
     }
 
